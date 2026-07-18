@@ -102,6 +102,33 @@ test("toCsv escapes and round-trips headers", () => {
   const csv = Importer.toCsv([{ number: "1", status: "Owned", note: "a,b" }]);
   assertEq(csv, 'number,status,note\n1,Owned,"a,b"');
 });
+test("rowsToRecords parses a NEED/HAVE per-team grid", () => {
+  const grid = [
+    ["", "", "NEED", "", "", "", "HAVE", ""],
+    ["", "MEX", "3", "6", "", "MEX", "9", "17"],
+    ["", "FWC", "2", "", "", "FWC", "10", ""],
+  ];
+  const recs = Importer.rowsToRecords(grid);
+  assertEq(recs, [
+    { number: "MEX 3", status: "Missing" },
+    { number: "MEX 6", status: "Missing" },
+    { number: "MEX 9", status: "Duplicate" },
+    { number: "MEX 17", status: "Duplicate" },
+    { number: "FWC 2", status: "Missing" },
+    { number: "FWC 10", status: "Duplicate" },
+  ]);
+});
+test("rowsToRecords still parses a simple number/status list", () => {
+  const recs = Importer.rowsToRecords([
+    ["number", "status"],
+    ["12", "Owned"],
+    ["13", "Missing"],
+  ]);
+  assertEq(recs, [
+    { number: "12", status: "Owned" },
+    { number: "13", status: "Missing" },
+  ]);
+});
 
 // ---- Ocr.extractTokens --------------------------------------------------
 console.log("Ocr");

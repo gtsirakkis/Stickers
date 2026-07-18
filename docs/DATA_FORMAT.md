@@ -32,6 +32,26 @@ ARG3,Duplicate
 
 An example file lives at [`sample-data/sample-master-list.csv`](../sample-data/sample-master-list.csv).
 
+## Per-team NEED / HAVE grid (also supported)
+
+Many collectors keep a per-team grid instead of a flat list. If the sheet has a
+**`NEED`** header over one block of columns and a **`HAVE`** header over another,
+the importer reads it automatically:
+
+- The first text cell in each row is the **team code** (e.g. `MEX`, `FWC`).
+- Numbers under **NEED** import as `TEAM n` with status **Missing**.
+- Numbers under **HAVE** import as `TEAM n` with status **Duplicate** (spares to swap).
+
+Example:
+
+| | team | NEED | | | | team | HAVE | |
+|-|------|------|--|--|-|------|------|--|
+| | MEX  | 3    | 6| 7| | MEX  | 9    | 17|
+| | FWC  | 2    |  |  | | FWC  | 10   |   |
+
+…imports as `MEX 3` (Missing), `MEX 6` (Missing), `MEX 7` (Missing),
+`MEX 9` (Duplicate), `MEX 17` (Duplicate), `FWC 2` (Missing), `FWC 10` (Duplicate).
+
 ## Number normalisation (matching rules)
 
 For comparison, a number is normalised by trimming, upper-casing and collapsing
