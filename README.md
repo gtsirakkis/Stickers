@@ -41,6 +41,9 @@ Everything runs in your browser and your data is stored locally
 ```
 .
 ├── index.html               # App shell + tab layout (single page)
+├── manifest.webmanifest     # PWA manifest (installable app metadata)
+├── sw.js                    # Service worker (offline caching)
+├── icons/                   # App icons (SVG source + 192/512 PNG)
 ├── css/
 │   └── styles.css           # Mobile-first styles, bottom tab bar, dark mode
 ├── js/
@@ -84,16 +87,45 @@ npx serve .        # or: npx http-server -p 8080
 
 Then open <http://localhost:8080> in a browser.
 
-### Using it on your Android phone
+Serving locally is only reachable from the same Wi-Fi as your computer. To use
+the app from **any network** (mobile data, other Wi-Fi, another person's phone),
+deploy it publicly — see below.
 
-1. Run the server on your computer (commands above).
-2. Find your computer's LAN IP (e.g. `192.168.1.20`).
-3. On the phone (same Wi-Fi) open `http://192.168.1.20:8080`.
-4. Add it to your home screen for an app-like experience.
-   The **Scan** tab's file picker offers the camera directly.
+---
 
-> Prefer zero setup? Host the folder for free on **GitHub Pages** / Netlify /
-> Cloudflare Pages (all free tiers) and open the URL on your phone.
+## Deploy it so anyone can use it from any network
+
+The app is a static site, so any free static host works. Because the code is
+already on GitHub, **GitHub Pages** is the least-effort choice. It gives you a
+public **HTTPS** URL — which is also required for the camera and for installing
+the app to a phone's home screen.
+
+### GitHub Pages (recommended, free)
+
+1. Get the app onto the branch Pages will serve (e.g. merge this branch into
+   `main`).
+2. On GitHub: **Settings → Pages**.
+3. Under **Build and deployment**, set **Source = Deploy from a branch**.
+4. Choose the branch (e.g. `main`) and folder **`/ (root)`**, then **Save**.
+5. Wait ~1 minute. Your app is live at
+   `https://<your-username>.github.io/<repo>/`
+   (for this repo: `https://gtsirakkis.github.io/Stickers/`).
+
+Share that URL with your wife — it works from any network, on any phone.
+Netlify and Cloudflare Pages are equivalent free alternatives (drag-and-drop
+the folder or connect the repo).
+
+### Install it as an app (PWA)
+
+This is a **Progressive Web App**, so once the public URL is open on a phone:
+
+- **Android (Chrome):** tap the **⋮** menu → **Add to Home screen** / **Install
+  app**. You'll get a soccer-ball icon that opens full-screen like a native app.
+- **iPhone (Safari):** tap **Share** → **Add to Home Screen**.
+
+After the first visit the app is cached and **opens offline**; the OCR model is
+also cached after its first use, so scanning works without a connection too.
+Your collection lives on each phone independently.
 
 ---
 
@@ -139,7 +171,6 @@ the trade proposal.
 
 ## Roadmap / ideas
 
-- Offline PWA (service worker + vendored libraries) so it works with no network.
 - IndexedDB for very large collections.
 - Multiple saved collections / other-collector profiles.
 - Sticker-set templates (auto-generate the full 1–N checklist).
