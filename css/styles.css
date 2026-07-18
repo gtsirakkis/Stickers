@@ -195,6 +195,7 @@ textarea { resize: vertical; }
   padding: 6px;
 }
 .empty { color: var(--muted); text-align: center; padding: 20px; font-size: 0.9rem; }
+.app-version { text-align: center; color: var(--muted); font-size: 0.72rem; margin: 6px 0 4px; opacity: 0.8; }
 
 /* ---------- OCR / chips ---------- */
 .preview { width: 100%; border-radius: 10px; margin-top: 12px; max-height: 300px; object-fit: contain; background: #000; }
