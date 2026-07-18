@@ -142,6 +142,8 @@ textarea { resize: vertical; }
 .file-btn.small { padding: 8px 12px; min-height: 38px; font-size: 0.85rem; }
 @media (prefers-color-scheme: dark) { .file-btn { color: #7fd1a8; border-color: #7fd1a8; } }
 
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-row .file-btn { flex: 1 1 140px; justify-content: center; }
 .checkbox { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 0.9rem; }
 .checkbox input { width: auto; }
 
