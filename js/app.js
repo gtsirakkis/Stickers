@@ -4,7 +4,7 @@
 
   // Bump this on every release so you can confirm which build a phone is
   // running. Keep it in step with CACHE_VERSION in sw.js.
-  const APP_VERSION = "1.1.0";
+  const APP_VERSION = "1.2.0";
 
   const $ = (id) => document.getElementById(id);
 
@@ -57,27 +57,27 @@
     });
   }
 
-  /* ---------------- OCR review chips ---------------- */
-  function renderChips() {
-    const box = $("detected-chips");
-    box.innerHTML = "";
-    if (!detectedTokens.length) {
-      box.innerHTML = '<span class="result-empty">No numbers detected — add them manually.</span>';
-      return;
-    }
-    detectedTokens.forEach((tok, i) => {
-      const chip = document.createElement("span");
-      chip.className = "chip" + (tok.low ? " low" : "");
-      chip.innerHTML = `${escapeHtml(tok.text)} <span class="x">✕</span>`;
-      chip.title = tok.low
-        ? `Low confidence (${Math.round(tok.confidence)}%) — tap to remove`
-        : "Tap to remove";
-      chip.addEventListener("click", () => {
-        detectedTokens.splice(i, 1);
-        renderChips();
-      });
-      box.appendChild(chip);
+  /* ---------------- OCR review (text) ---------------- */
+
+  // Parse the review textarea into country+number tokens, anchored on the
+  // country codes already in the collection.
+  function parseReview() {
+    const lines = String($("detected-text").value || "").split(/\r?\n/);
+    return Ocr.parseLines(lines, {
+      knownCodes: Store.countryCodes(),
+      maxNumber: Store.maxNumber(),
     });
+  }
+
+  function updateDetectedSummary() {
+    const toks = parseReview();
+    detectedTokens = toks;
+    const flagged = toks.filter((t) => t.low).length;
+    const el = $("detected-summary");
+    el.className = "status-line";
+    el.textContent =
+      `${toks.length} sticker(s) recognised` +
+      (flagged ? ` · ${flagged} need a check (unknown country or number > ${Store.maxNumber()})` : "");
   }
 
   function initOcr() {
@@ -95,13 +95,13 @@
       $("results-card").hidden = true;
 
       try {
-        const { tokens } = await Ocr.recognize(file, (frac, label) => {
+        const { lines } = await Ocr.recognize(file, (frac, label) => {
           prog.textContent = `${label}… ${Math.round((frac || 0) * 100)}%`;
         });
-        detectedTokens = tokens;
+        $("detected-text").value = lines.join("\n");
+        updateDetectedSummary();
         prog.className = "status-line ok";
-        prog.textContent = `Detected ${tokens.length} candidate number(s). Review below.`;
-        renderChips();
+        prog.textContent = "Done. Check the country codes and numbers below, then compare.";
         $("review-card").hidden = false;
       } catch (err) {
         console.error(err);
@@ -112,21 +112,10 @@
       }
     });
 
-    $("add-detected-form").addEventListener("submit", (e) => {
-      e.preventDefault();
-      const input = $("add-detected-number");
-      const val = input.value.trim();
-      if (!val) return;
-      const key = Store.normalize(val);
-      if (!detectedTokens.some((t) => Store.normalize(t.text) === key)) {
-        detectedTokens.push({ text: val, confidence: 100, low: false });
-      }
-      input.value = "";
-      input.focus();
-      renderChips();
-    });
+    $("detected-text").addEventListener("input", updateDetectedSummary);
 
     $("compare-btn").addEventListener("click", () => {
+      detectedTokens = parseReview();
       const res = Matcher.match(detectedTokens);
       renderMatchResults(res);
       $("results-card").hidden = false;
@@ -144,29 +133,37 @@
   }
 
   function renderMatchResults(res) {
-    $("match-results").innerHTML = `
+    let html = `
       <div class="result-group">
-        <h4><span class="dot want"></span>They have — you're MISSING (${res.want.length})</h4>
+        <h4><span class="dot want"></span>They have — you NEED these (${res.want.length})</h4>
         ${numGrid(res.want)}
       </div>
       <div class="result-group">
-        <h4><span class="dot have"></span>You already own these (${res.already.length})</h4>
+        <h4><span class="dot have"></span>You already have / don't need (${res.already.length})</h4>
         ${numGrid(res.already)}
-      </div>
+      </div>`;
+    if (res.unknown.length) {
+      html += `
       <div class="result-group">
         <h4><span class="dot unknown"></span>Not on your list — check manually (${res.unknown.length})</h4>
         ${numGrid(res.unknown)}
-      </div>
+      </div>`;
+    }
+    html += `
       <div class="result-group">
-        <h4><span class="dot unknown"></span>Not confidently recognised (${res.lowconf.length})</h4>
+        <h4><span class="dot unknown"></span>Couldn't read confidently — fix above &amp; re-compare (${res.lowconf.length})</h4>
         ${numGrid(res.lowconf)}
-      </div>
-    `;
+      </div>`;
+    $("match-results").innerHTML = html;
   }
 
   /* ---------------- Trade tab ---------------- */
   function getTheirWanted() {
-    return Importer.parseNumberList($("their-missing-text").value);
+    const lines = String($("their-missing-text").value || "").split(/\r?\n/);
+    return Ocr.parseLines(lines, {
+      knownCodes: Store.countryCodes(),
+      maxNumber: Store.maxNumber(),
+    });
   }
 
   function initTrade() {
@@ -181,13 +178,15 @@
         let nums;
         if (name.endsWith(".csv") || name.endsWith(".xlsx") || name.endsWith(".xls")) {
           const recs = await Importer.parseFile(file);
-          nums = recs.map((r) => r.number);
+          // Their "wanted" list = the stickers they're missing.
+          const miss = recs.filter((r) => Store.normalizeStatus(r.status) === "Missing");
+          nums = (miss.length ? miss : recs).map((r) => r.number);
         } else {
           const text = await file.text();
           nums = Importer.parseNumberList(text);
         }
         const existing = $("their-missing-text").value.trim();
-        $("their-missing-text").value = (existing ? existing + "\n" : "") + nums.join(", ");
+        $("their-missing-text").value = (existing ? existing + "\n" : "") + nums.join("\n");
         status.className = "status-line ok";
         status.textContent = `Loaded ${nums.length} number(s).`;
       } catch (err) {
@@ -199,17 +198,18 @@
     });
 
     $("use-scan-btn").addEventListener("click", () => {
-      // Not their wanted list — this fills nothing; scanned dups are used
-      // automatically. Give feedback instead.
+      // The scanned list (their duplicates) is used automatically as their
+      // "give" side; this just reports how many were read.
+      const scanned = parseReview();
       const status = $("their-missing-status");
       status.className = "status-line";
-      status.textContent = detectedTokens.length
-        ? `Using ${detectedTokens.length} scanned duplicate(s) as their "give" list.`
-        : "No scanned duplicates yet — use the Scan tab first.";
+      status.textContent = scanned.length
+        ? `Using ${scanned.length} scanned sticker(s) as their "give" list.`
+        : "No scanned list yet — use the Scan tab first.";
     });
 
     $("trade-btn").addEventListener("click", () => {
-      const result = Trade.build(detectedTokens, getTheirWanted());
+      const result = Trade.build(parseReview(), getTheirWanted());
       renderTradeResults(result);
       $("trade-results-card").hidden = false;
       $("trade-results-card").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -247,7 +247,6 @@
     Stickers.init();
     initOcr();
     initTrade();
-    renderChips();
     const ver = $("app-version");
     if (ver) ver.textContent = "World Cup Sticker Matcher · v" + APP_VERSION;
   }

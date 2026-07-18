@@ -111,17 +111,17 @@
     </div>
 
     <div class="card" id="review-card" hidden>
-      <h3>Review detected numbers</h3>
+      <h3>Review detected list</h3>
       <p class="hint">
-        Tap a chip to remove a wrong number. Low-confidence reads are marked
-        <span class="chip low inline">like this</span>. Add anything the OCR
-        missed below.
+        One country per line, e.g. <code>ECU: 1, 2, 8, 16, 17</code>. Fix any
+        wrong <strong>country code</strong> or number here — the app combines
+        each number with its country (so <code>ECU 2</code>, not just
+        <code>2</code>). Numbers may be written as <code>3</code> or
+        <code>03</code>.
       </p>
-      <div id="detected-chips" class="chips"></div>
-      <form id="add-detected-form" class="inline-form">
-        <input id="add-detected-number" type="text" placeholder="Add a number" />
-        <button type="submit" class="btn">Add</button>
-      </form>
+      <textarea id="detected-text" rows="12" spellcheck="false"
+        placeholder="ECU: 1, 2, 8, 16, 17, 20&#10;NED: 2, 3, 4, 5, 7, 8"></textarea>
+      <p id="detected-summary" class="status-line"></p>
       <button id="compare-btn" class="btn primary full">Compare with my list</button>
     </div>
 
@@ -143,9 +143,12 @@
 
     <div class="card">
       <h3>Their wanted list</h3>
-      <p class="hint">Type or paste numbers, or import a file.</p>
+      <p class="hint">
+        One country per line, e.g. <code>MEX: 3, 5, 12</code>. Or import their
+        file / reuse the scanned list.
+      </p>
       <textarea id="their-missing-text" rows="4"
-        placeholder="e.g. 12, 45, 200 ARG3 …"></textarea>
+        placeholder="MEX: 3, 5, 12&#10;BRA: 2, 8"></textarea>
       <div class="list-toolbar">
         <label class="file-btn small">
           Import file…

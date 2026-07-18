@@ -11,12 +11,16 @@
   const KEY = "wcsm.collection.v1";
   const VALID = ["Owned", "Missing", "Duplicate"];
 
-  /** Normalise a sticker label for comparison/keying. */
+  /**
+   * Normalise a sticker label for comparison/keying.
+   * Leading zeros on the number are stripped so "ECU 03" == "ECU 3" == "ecu 3".
+   */
   function normalize(raw) {
     return String(raw == null ? "" : raw)
       .trim()
       .toUpperCase()
-      .replace(/\s+/g, " ");
+      .replace(/\s+/g, " ")
+      .replace(/\d+/g, (d) => String(parseInt(d, 10)));
   }
 
   /** Map a free-text status onto a valid status, or null if unrecognised. */
@@ -69,6 +73,26 @@
         if (r.status === status) set.add(normalize(r.number));
       }
       return set;
+    },
+
+    /** Distinct country/team codes present in the collection (e.g. "ECU"). */
+    countryCodes() {
+      const set = new Set();
+      for (const r of load()) {
+        const m = String(r.number).trim().toUpperCase().match(/^([A-Z][A-Z .]*?)\s*\d+$/);
+        if (m && m[1].trim()) set.add(m[1].trim());
+      }
+      return set;
+    },
+
+    /** Highest sticker number seen in the collection (Infinity if none). */
+    maxNumber() {
+      let max = 0;
+      for (const r of load()) {
+        const m = String(r.number).match(/(\d+)\s*$/);
+        if (m) max = Math.max(max, parseInt(m[1], 10));
+      }
+      return max || Infinity;
     },
 
     /** Look up a record by (normalised) number. */
