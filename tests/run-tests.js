@@ -171,6 +171,14 @@ test("parseLines treats 0X and X as the same sticker (via later normalise)", () 
   // parseInt drops the leading zero, so both collapse to ECU 3 (deduped).
   assertEq(toks.map((t) => t.text), ["ECU 3"]);
 });
+test("parseLines de-duplicates repeats across accumulated images", () => {
+  // e.g. two screenshots that both include the ECU line.
+  const toks = Ocr.parseLines(
+    ["ECU 1, 2, 8", "NED 4, 5", "ECU 1, 2, 8"],
+    { knownCodes: KNOWN, maxNumber: 20 }
+  );
+  assertEq(toks.map((t) => t.text), ["ECU 1", "ECU 2", "ECU 8", "NED 4", "NED 5"]);
+});
 test("matchCode returns exact then fuzzy", () => {
   assertEq(Ocr.matchCode("NED", KNOWN), { code: "NED", fuzzy: false });
   assertEq(Ocr.matchCode("NAD", KNOWN), { code: "NED", fuzzy: true });
