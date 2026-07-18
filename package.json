@@ -1,0 +1,12 @@
+{
+  "name": "world-cup-sticker-matcher",
+  "version": "0.1.0",
+  "description": "Mobile-friendly, fully client-side web app to manage a World Cup sticker collection and match duplicates via OCR.",
+  "private": true,
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "serve": "python3 -m http.server 8080",
+    "test": "node tests/run-tests.js"
+  },
+  "license": "MIT"
+}
