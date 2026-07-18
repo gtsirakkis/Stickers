@@ -7,6 +7,70 @@
   const NUMBER_HEADERS = ["number", "no", "num", "sticker", "id", "code", "#"];
   const STATUS_HEADERS = ["status", "state", "have", "type", "owned"];
 
+  // "NEED / HAVE" per-team grid support (a very common collector layout).
+  const NEED_RE = /^(need|needs|want|wanted|wants|missing|miss)$/i;
+  const HAVE_RE = /^(have|haves|spare|spares|swap|swaps|double|doubles|dup|dupe|dupes|duplicate|duplicates|got)$/i;
+  const TEAM_RE = /^[A-Za-z][A-Za-z.\- ]{1,11}$/; // a team/country code or name
+  const NUM_RE = /^\d{1,4}$/;
+
+  /**
+   * Detect a NEED/HAVE grid header within the first few rows.
+   * Returns { headerIndex, needCol, haveCol } or null.
+   */
+  function findMatrixHeader(rows) {
+    const limit = Math.min(rows.length, 5);
+    for (let r = 0; r < limit; r++) {
+      const row = rows[r] || [];
+      let needCol = -1;
+      let haveCol = -1;
+      for (let i = 0; i < row.length; i++) {
+        const v = String(row[i] == null ? "" : row[i]).trim();
+        if (needCol === -1 && NEED_RE.test(v)) needCol = i;
+        if (HAVE_RE.test(v)) haveCol = i; // last HAVE wins (right-hand block)
+      }
+      if (needCol !== -1 && haveCol !== -1 && haveCol > needCol) {
+        return { headerIndex: r, needCol, haveCol };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Convert a NEED/HAVE grid into records. Each row is a team; numbers under
+   * NEED become "TEAM n" (Missing) and numbers under HAVE become "TEAM n"
+   * (Duplicate). The left block is columns [0, haveCol); the right block is
+   * [haveCol, end). The team code is the first alphabetic cell in each block.
+   */
+  function matrixToRecords(rows, m) {
+    const records = [];
+    const isNum = (v) => NUM_RE.test(String(v == null ? "" : v).trim());
+    const isTeam = (v) => TEAM_RE.test(String(v == null ? "" : v).trim());
+    for (let r = m.headerIndex + 1; r < rows.length; r++) {
+      const row = rows[r];
+      if (!row) continue;
+      const left = row.slice(0, m.haveCol);
+      const right = row.slice(m.haveCol);
+
+      let leftTeam = "";
+      for (const c of left) if (isTeam(c)) { leftTeam = String(c).trim().toUpperCase(); break; }
+      let rightTeam = "";
+      for (const c of right) if (isTeam(c)) { rightTeam = String(c).trim().toUpperCase(); break; }
+      if (!rightTeam) rightTeam = leftTeam; // right block often omits the code
+
+      for (let i = m.needCol; i < left.length; i++) {
+        if (leftTeam && isNum(left[i])) {
+          records.push({ number: leftTeam + " " + String(left[i]).trim(), status: "Missing" });
+        }
+      }
+      for (let i = 0; i < right.length; i++) {
+        if (rightTeam && isNum(right[i])) {
+          records.push({ number: rightTeam + " " + String(right[i]).trim(), status: "Duplicate" });
+        }
+      }
+    }
+    return records;
+  }
+
   function pickColumn(headers, candidates) {
     const lower = headers.map((h) => String(h || "").trim().toLowerCase());
     for (const cand of candidates) {
@@ -27,6 +91,10 @@
   function rowsToRecords(rows) {
     const cleaned = rows.filter((r) => r && r.some((c) => String(c).trim() !== ""));
     if (!cleaned.length) return [];
+
+    // Per-team NEED/HAVE grid takes priority over the simple 2-column layout.
+    const matrix = findMatrixHeader(cleaned);
+    if (matrix) return matrixToRecords(cleaned, matrix);
 
     const first = cleaned[0].map((c) => String(c || "").trim().toLowerCase());
     const looksLikeHeader =
@@ -56,6 +124,8 @@
   }
 
   const Importer = {
+    rowsToRecords, // exposed for tests / reuse
+
     /** Parse a File (CSV or Excel) -> Promise<records[]> */
     parseFile(file) {
       const name = (file.name || "").toLowerCase();
