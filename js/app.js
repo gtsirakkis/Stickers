@@ -4,7 +4,7 @@
 
   // Bump this on every release so you can confirm which build a phone is
   // running. Keep it in step with CACHE_VERSION in sw.js.
-  const APP_VERSION = "1.2.0";
+  const APP_VERSION = "1.3.0";
 
   const $ = (id) => document.getElementById(id);
 
@@ -80,36 +80,41 @@
       (flagged ? ` · ${flagged} need a check (unknown country or number > ${Store.maxNumber()})` : "");
   }
 
+  // Shared by both the camera and the upload inputs.
+  async function handleImageFile(file, inputEl) {
+    if (!file) return;
+    const preview = $("ocr-preview");
+    preview.src = URL.createObjectURL(file);
+    preview.hidden = false;
+
+    const prog = $("ocr-progress");
+    prog.className = "status-line";
+    prog.textContent = "Starting OCR…";
+    $("review-card").hidden = true;
+    $("results-card").hidden = true;
+
+    try {
+      const { lines } = await Ocr.recognize(file, (frac, label) => {
+        prog.textContent = `${label}… ${Math.round((frac || 0) * 100)}%`;
+      });
+      $("detected-text").value = lines.join("\n");
+      updateDetectedSummary();
+      prog.className = "status-line ok";
+      prog.textContent = "Done. Check the country codes and numbers below, then compare.";
+      $("review-card").hidden = false;
+    } catch (err) {
+      console.error(err);
+      prog.className = "status-line error";
+      prog.textContent = "OCR failed: " + (err.message || err);
+    } finally {
+      if (inputEl) inputEl.value = ""; // allow re-selecting the same file
+    }
+  }
+
   function initOcr() {
-    $("ocr-file").addEventListener("change", async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const preview = $("ocr-preview");
-      preview.src = URL.createObjectURL(file);
-      preview.hidden = false;
-
-      const prog = $("ocr-progress");
-      prog.className = "status-line";
-      prog.textContent = "Starting OCR…";
-      $("review-card").hidden = true;
-      $("results-card").hidden = true;
-
-      try {
-        const { lines } = await Ocr.recognize(file, (frac, label) => {
-          prog.textContent = `${label}… ${Math.round((frac || 0) * 100)}%`;
-        });
-        $("detected-text").value = lines.join("\n");
-        updateDetectedSummary();
-        prog.className = "status-line ok";
-        prog.textContent = "Done. Check the country codes and numbers below, then compare.";
-        $("review-card").hidden = false;
-      } catch (err) {
-        console.error(err);
-        prog.className = "status-line error";
-        prog.textContent = "OCR failed: " + (err.message || err);
-      } finally {
-        e.target.value = "";
-      }
+    ["ocr-camera", "ocr-upload"].forEach((id) => {
+      const el = $(id);
+      if (el) el.addEventListener("change", (e) => handleImageFile(e.target.files[0], e.target));
     });
 
     $("detected-text").addEventListener("input", updateDetectedSummary);

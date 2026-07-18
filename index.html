@@ -102,10 +102,17 @@
         Upload a photo of another collector's <strong>duplicate</strong> list.
         The app reads the numbers with OCR so you can review them.
       </p>
-      <label class="file-btn">
-        Choose image…
-        <input id="ocr-file" type="file" accept="image/*" capture="environment" hidden />
-      </label>
+      <div class="btn-row">
+        <label class="file-btn">
+          📷 Take photo
+          <input id="ocr-camera" type="file" accept="image/*" capture="environment" hidden />
+        </label>
+        <label class="file-btn">
+          🖼️ Upload image
+          <input id="ocr-upload" type="file" accept="image/*" hidden />
+        </label>
+      </div>
+      <p class="hint">Use <strong>Upload</strong> for a screenshot or a picture saved from Facebook, WhatsApp, etc.</p>
       <div id="ocr-progress" class="status-line"></div>
       <img id="ocr-preview" class="preview" alt="" hidden />
     </div>
