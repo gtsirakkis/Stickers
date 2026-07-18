@@ -2,6 +2,10 @@
 (function (global) {
   "use strict";
 
+  // Bump this on every release so you can confirm which build a phone is
+  // running. Keep it in step with CACHE_VERSION in sw.js.
+  const APP_VERSION = "1.1.0";
+
   const $ = (id) => document.getElementById(id);
 
   // State shared between the Scan and Trade tabs.
@@ -244,6 +248,8 @@
     initOcr();
     initTrade();
     renderChips();
+    const ver = $("app-version");
+    if (ver) ver.textContent = "World Cup Sticker Matcher · v" + APP_VERSION;
   }
 
   if (document.readyState === "loading") {
