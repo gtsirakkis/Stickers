@@ -18,15 +18,19 @@ Everything runs in your browser and your data is stored locally
    - Search, filter, live counts, and **CSV export** (backup).
 
 2. **Scan a photo** (the core feature)
-   - Upload/take a **photo or screenshot** of another collector's duplicate list.
-   - **OCR** (Tesseract.js, in-browser) extracts the sticker numbers.
-   - **Review & correct** the detected numbers — remove wrong ones, add missed
-     ones. Low-confidence reads are visibly flagged.
-   - **Compare** against your list. Results are grouped clearly:
-     - 🟢 **They have — you're missing** (the ones you want)
-     - 🔵 **You already own these**
-     - 🟠 **Not on your list** — decide manually
-     - 🟠 **Not confidently recognised** — needs your review
+   - Upload/take a **photo or screenshot** of another collector's list, laid out
+     one country per line (`ECU: 1, 2, 8, 16, 17`).
+   - **OCR** (Tesseract.js, in-browser) reads it into an editable text box, **one
+     country per line**.
+   - The app reads the **country first, then each number**, so a sticker is
+     identified as `ECU 2` — not a bare `2` (which would be ambiguous across
+     countries). Country codes are auto-corrected against your own collection,
+     and numbers written as `3` or `03` are treated the same.
+   - **Review & fix** the text (correct a wrong country code and all its numbers
+     update at once), then **Compare**. Results are grouped clearly:
+     - 🟢 **They have — you NEED these**
+     - 🔵 **You already have / don't need**
+     - 🟠 **Couldn't read confidently** — fix the text and re-compare
 
 3. **Propose a trade**
    - Enter (type / paste / import) the other collector's **missing/wanted** list.
@@ -143,19 +147,21 @@ the trade proposal.
 2. **Collection tab** → *Choose file* → pick
    `sample-data/sample-master-list.csv`. You should see counts populate
    (Owned / Missing / Duplicate). Try changing a status and deleting a row.
-3. **Scan tab** → *Choose image* → take/upload a photo of a handwritten or
-   printed list of numbers (some that are on your Missing list, e.g. `3 5 8 12`).
-   Watch OCR progress, then review the chips. Tap wrong ones to remove; add any
-   it missed. Press **Compare with my list** and check the four result groups.
-4. **Trade tab** → type a few numbers that match your **Duplicate** stickers
-   (from the sample: `4 7 11 ARG3 FWC1`) as the other collector's wanted list,
-   then **Build proposed exchange**. You'll get a balanced give/receive summary.
+3. **Scan tab** → *Choose image* → take/upload a photo of a list laid out one
+   country per line (`ECU: 1, 2, 8`). OCR fills the review box; correct any wrong
+   country codes or numbers, then press **Compare with my list** and check the
+   result groups (they'll be `ECU 1`, `ECU 2`, … not bare numbers).
+4. **Trade tab** → enter the other collector's wanted list, one country per line
+   (`MEX: 3, 5, 12`), then **Build proposed exchange**. You'll get a balanced
+   give/receive summary paired against your duplicates.
 
 ### OCR tips (for best results)
-- Good lighting, numbers roughly horizontal, minimal background clutter.
+- Good lighting, text roughly horizontal, minimal background clutter.
 - Screenshots of typed lists read far better than blurry photos.
-- Always review the detected numbers before comparing — OCR is not perfect,
-  which is exactly why the review step exists.
+- Keep one country per line so the country code stays with its numbers.
+- Always review the text before comparing — OCR is not perfect, which is exactly
+  why the review step exists. Country codes are auto-corrected against your
+  collection, and numbers above your highest sticker number are flagged.
 
 ---
 

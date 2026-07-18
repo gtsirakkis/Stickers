@@ -18,6 +18,11 @@
     const owned = Store.numberSet("Owned");
     const dup = Store.numberSet("Duplicate");
 
+    // A NEED/HAVE list only records Missing + Duplicate; singles you own are
+    // simply absent. So with no explicit "Owned" rows, a sticker that's not on
+    // the list means you already own it (don't need it) rather than "unknown".
+    const notListedMeansOwned = owned.size === 0;
+
     const want = [];
     const already = [];
     const unknown = [];
@@ -38,6 +43,8 @@
       if (missing.has(key)) {
         want.push(text);
       } else if (owned.has(key) || dup.has(key)) {
+        already.push(text);
+      } else if (notListedMeansOwned) {
         already.push(text);
       } else {
         unknown.push(text);

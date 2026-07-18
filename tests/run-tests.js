@@ -46,9 +46,24 @@ function assertEq(a, b, msg) {
 
 // ---- Store --------------------------------------------------------------
 console.log("Store");
-test("normalize collapses case & whitespace", () => {
+test("normalize collapses case, whitespace & leading zeros", () => {
   assertEq(Store.normalize("  arg 3 "), "ARG 3");
   assertEq(Store.normalize("Arg  3"), "ARG 3");
+  assertEq(Store.normalize("ecu 03"), "ECU 3"); // 0X == X
+  assertEq(Store.normalize("07"), "7");
+});
+test("countryCodes and maxNumber summarise the collection", () => {
+  Store.importRecords(
+    [
+      { number: "ECU 1", status: "Missing" },
+      { number: "ECU 20", status: "Owned" },
+      { number: "NED 5", status: "Duplicate" },
+    ],
+    false
+  );
+  const codes = Store.countryCodes();
+  assert(codes.has("ECU") && codes.has("NED") && codes.size === 2);
+  assertEq(Store.maxNumber(), 20);
 });
 test("normalizeStatus maps synonyms", () => {
   assertEq(Store.normalizeStatus("have"), "Owned");
@@ -130,27 +145,36 @@ test("rowsToRecords still parses a simple number/status list", () => {
   ]);
 });
 
-// ---- Ocr.extractTokens --------------------------------------------------
+// ---- Ocr.parseLines -----------------------------------------------------
 console.log("Ocr");
-test("extractTokens keeps valid labels & flags low confidence", () => {
-  const words = [
-    { text: "12", confidence: 95 },
-    { text: "ARG3", confidence: 88 },
-    { text: "hello", confidence: 99 },   // not a sticker label
-    { text: "45", confidence: 40 },      // low confidence
-    { text: "99999", confidence: 90 },   // too many digits -> rejected
-  ];
-  const toks = Ocr.extractTokens(words);
-  const map = Object.fromEntries(toks.map((t) => [t.text, t]));
-  assert(map["12"] && !map["12"].low, "12 should be present, high conf");
-  assert(map["ARG3"], "ARG3 should be present");
-  assert(map["45"] && map["45"].low, "45 should be low confidence");
-  assert(!map["HELLO"], "words should be rejected");
-  assert(!map["99999"], "5-digit token should be rejected");
+const KNOWN = new Set(["ECU", "NED", "JPN", "COL", "JOR"]);
+test("parseLines combines each country with its numbers", () => {
+  const toks = Ocr.parseLines(["ECU 1, 2, 8, 16, 17, 20"], { knownCodes: KNOWN, maxNumber: 20 });
+  assertEq(toks.map((t) => t.text), ["ECU 1", "ECU 2", "ECU 8", "ECU 16", "ECU 17", "ECU 20"]);
+  assert(toks.every((t) => !t.low), "all should be high confidence");
 });
-test("extractTokens splits words containing several numbers", () => {
-  const toks = Ocr.extractTokens([{ text: "12,45/7", confidence: 90 }]);
-  assertEq(toks.map((t) => t.text).sort(), ["12", "45", "7"]);
+test("parseLines ignores flag/colon punctuation between code and numbers", () => {
+  const toks = Ocr.parseLines(["JPN @: 1, 2, 4"], { knownCodes: KNOWN, maxNumber: 20 });
+  assertEq(toks.map((t) => t.text), ["JPN 1", "JPN 2", "JPN 4"]);
+});
+test("parseLines fuzzily corrects a mis-read country code (flagged low)", () => {
+  const toks = Ocr.parseLines(["COLM 3, 4"], { knownCodes: KNOWN, maxNumber: 20 });
+  assertEq(toks.map((t) => t.text), ["COL 3", "COL 4"]);
+  assert(toks.every((t) => t.low), "fuzzy-matched code should be low confidence");
+});
+test("parseLines flags out-of-range junk numbers", () => {
+  const toks = Ocr.parseLines(["ECU 171, 616"], { knownCodes: KNOWN, maxNumber: 20 });
+  assert(toks.every((t) => t.low), "numbers above maxNumber should be low");
+});
+test("parseLines treats 0X and X as the same sticker (via later normalise)", () => {
+  const toks = Ocr.parseLines(["ECU 03, 3"], { knownCodes: KNOWN, maxNumber: 20 });
+  // parseInt drops the leading zero, so both collapse to ECU 3 (deduped).
+  assertEq(toks.map((t) => t.text), ["ECU 3"]);
+});
+test("matchCode returns exact then fuzzy", () => {
+  assertEq(Ocr.matchCode("NED", KNOWN), { code: "NED", fuzzy: false });
+  assertEq(Ocr.matchCode("NAD", KNOWN), { code: "NED", fuzzy: true });
+  assertEq(Ocr.matchCode("ZZZ", KNOWN), null);
 });
 
 // ---- Matcher ------------------------------------------------------------
@@ -176,11 +200,23 @@ test("match splits want / already / unknown / lowconf", () => {
   assertEq(res.unknown, ["8"]);
   assertEq(res.lowconf, ["9"]);
 });
-test("match de-duplicates detected numbers", () => {
-  Store.upsert("3", "Missing");
-  const res = Matcher.match(["3", "3", "03"]);
-  assertEq(res.want, ["3"]); // "3" and "03" are different keys; "3" appears once
-  assert(res.unknown.includes("03"));
+test("match de-duplicates and treats 03 == 3", () => {
+  Store.upsert("ECU 3", "Missing");
+  const res = Matcher.match(["ECU 3", "ECU 03", "ECU 3"]);
+  assertEq(res.want, ["ECU 3"]); // all collapse to one via leading-zero normalise
+  assertEq(res.unknown, []);
+});
+test("match works on country+number tokens", () => {
+  Store.importRecords(
+    [
+      { number: "ECU 3", status: "Missing" },
+      { number: "NED 3", status: "Owned" }, // same number, different country
+    ],
+    false
+  );
+  const res = Matcher.match([{ text: "ECU 3" }, { text: "NED 3" }]);
+  assertEq(res.want, ["ECU 3"]);   // missing for Ecuador
+  assertEq(res.already, ["NED 3"]); // owned for Netherlands
 });
 
 // ---- Trade --------------------------------------------------------------

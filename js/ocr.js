@@ -1,56 +1,106 @@
-/* ocr.js — run in-browser OCR (Tesseract.js) on an uploaded image and
- * extract candidate sticker numbers, each tagged with a confidence.
+/* ocr.js — in-browser OCR (Tesseract.js) plus line-aware parsing.
  *
- * Detected token shape: { text: string, confidence: number, low: boolean }
+ * Collectors' lists are structured one country per line:
+ *     ECU 🏴: 1, 2, 8, 16, 17, 20
+ *     NED 🏴: 2, 3, 4, 5, 7, 8, 18, 19, 20
+ * A bare number is meaningless (number 2 exists for every country), so we
+ * read the COUNTRY first and combine it with each number -> "ECU 2".
+ *
+ * parseLines() is pure (no Tesseract, no DOM) so it is unit-testable. It uses
+ * the set of known country codes (from the user's own collection) to validate
+ * and fuzzily correct the code OCR read, and a max sticker number to flag junk.
+ *
+ * Token shape: { text: "ECU 2", confidence: number, low: boolean }
  */
 (function (global) {
   "use strict";
 
-  // Tokens whose confidence is below this are flagged "low" (still shown,
-  // but the user is nudged to double-check them).
   const LOW_CONFIDENCE = 60;
 
-  // Sticker labels: mostly digits, sometimes a short country/team prefix.
-  // Accept 1–4 letters optionally, then 1–4 digits (e.g. 12, 205, ARG3, FWC12).
-  const TOKEN_RE = /^[A-Z]{0,4}\d{1,4}$/;
-
-  function cleanToken(raw) {
-    return String(raw || "")
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, "");
+  /** Levenshtein distance, capped early for speed. */
+  function editDistance(a, b) {
+    const m = a.length, n = b.length;
+    if (Math.abs(m - n) > 1) return 2; // we only care about <= 1
+    const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+      }
+    }
+    return dp[m][n];
   }
 
-  /**
-   * Extract candidate numbers from Tesseract word data.
-   * Returns a de-duplicated array of tokens (best confidence kept per token).
-   */
-  function extractTokens(words) {
-    const byText = new Map();
-    for (const w of words || []) {
-      // A word may itself contain several numbers separated by punctuation.
-      const parts = String(w.text || "").split(/[\s,;/|]+/);
-      for (const part of parts) {
-        const t = cleanToken(part);
-        if (!t || !TOKEN_RE.test(t)) continue;
-        const conf = typeof w.confidence === "number" ? w.confidence : 0;
-        const prev = byText.get(t);
-        if (!prev || conf > prev.confidence) {
-          byText.set(t, { text: t, confidence: conf, low: conf < LOW_CONFIDENCE });
+  /** Find a known code equal to (or within 1 edit of) the candidate. */
+  function matchCode(candidate, knownCodes) {
+    const cand = String(candidate || "").toUpperCase();
+    if (!cand) return null;
+    if (knownCodes.has(cand)) return { code: cand, fuzzy: false };
+    let best = null;
+    for (const code of knownCodes) {
+      if (editDistance(cand, code) <= 1) {
+        if (!best || Math.abs(code.length - cand.length) < Math.abs(best.length - cand.length)) {
+          best = code;
         }
       }
     }
-    return Array.from(byText.values()).sort((a, b) =>
-      a.text.localeCompare(b.text, undefined, { numeric: true })
-    );
+    return best ? { code: best, fuzzy: true } : null;
+  }
+
+  /**
+   * Parse OCR line strings into country+number tokens.
+   * @param {string[]} lines
+   * @param {{knownCodes?: Set<string>, maxNumber?: number}} opts
+   */
+  function parseLines(lines, opts) {
+    opts = opts || {};
+    const known = opts.knownCodes || new Set();
+    const maxNumber = opts.maxNumber || Infinity;
+    const tokens = [];
+    const seen = new Set();
+
+    for (const raw of lines || []) {
+      const line = String(raw == null ? "" : raw).trim();
+      if (!line) continue;
+
+      // Leading letters = candidate country code.
+      const lead = line.match(/^([A-Za-z]{2,5})/);
+      let code = null;
+      let fuzzy = false;
+      if (lead && known.size) {
+        const hit = matchCode(lead[1], known);
+        if (hit) { code = hit.code; fuzzy = hit.fuzzy; }
+      } else if (lead) {
+        code = lead[1].toUpperCase();
+      }
+
+      // Numbers after the leading letters (ignores flag/colon punctuation).
+      const rest = lead ? line.slice(lead[1].length) : line;
+      const nums = rest.match(/\d{1,3}/g) || [];
+      for (const ns of nums) {
+        const n = parseInt(ns, 10);
+        if (!n) continue;
+        const outOfRange = n > maxNumber;
+        const text = code ? code + " " + n : String(n);
+        const key = code ? code + " " + n : String(n);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const low = !code || fuzzy || outOfRange;
+        tokens.push({ text, confidence: low ? 40 : 90, low });
+      }
+    }
+    return tokens;
   }
 
   const Ocr = {
     LOW_CONFIDENCE,
-    extractTokens, // exported for tests
+    parseLines,
+    matchCode, // exported for tests
 
     /**
      * Recognise an image File. `onProgress(fraction, label)` is optional.
-     * Resolves to { tokens, rawText }.
+     * Resolves to { lines: string[], rawText }.
      */
     async recognize(file, onProgress) {
       if (!global.Tesseract) {
@@ -64,14 +114,11 @@
           },
         });
         const data = result.data || {};
-        const words =
-          data.words ||
-          (data.blocks || []).flatMap((b) =>
-            (b.paragraphs || []).flatMap((p) =>
-              (p.lines || []).flatMap((l) => l.words || [])
-            )
-          );
-        return { tokens: extractTokens(words), rawText: data.text || "" };
+        let lines = (data.lines || []).map((l) => (l.text || "").trim()).filter(Boolean);
+        if (!lines.length && data.text) {
+          lines = String(data.text).split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+        }
+        return { lines, rawText: data.text || "" };
       } finally {
         URL.revokeObjectURL(url);
       }
