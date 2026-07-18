@@ -108,11 +108,15 @@
           <input id="ocr-camera" type="file" accept="image/*" capture="environment" hidden />
         </label>
         <label class="file-btn">
-          🖼️ Upload image
-          <input id="ocr-upload" type="file" accept="image/*" hidden />
+          🖼️ Upload image(s)
+          <input id="ocr-upload" type="file" accept="image/*" multiple hidden />
         </label>
       </div>
-      <p class="hint">Use <strong>Upload</strong> for a screenshot or a picture saved from Facebook, WhatsApp, etc.</p>
+      <p class="hint">
+        Use <strong>Upload</strong> for a screenshot or a picture saved from
+        Facebook, WhatsApp, etc. You can pick <strong>several images at once</strong>,
+        or take/upload more one by one — they all add to the same list below.
+      </p>
       <div id="ocr-progress" class="status-line"></div>
       <img id="ocr-preview" class="preview" alt="" hidden />
     </div>
@@ -128,7 +132,10 @@
       </p>
       <textarea id="detected-text" rows="12" spellcheck="false"
         placeholder="ECU: 1, 2, 8, 16, 17, 20&#10;NED: 2, 3, 4, 5, 7, 8"></textarea>
-      <p id="detected-summary" class="status-line"></p>
+      <div class="list-toolbar end">
+        <p id="detected-summary" class="status-line"></p>
+        <button id="clear-scan-btn" class="btn ghost small">Clear list</button>
+      </div>
       <button id="compare-btn" class="btn primary full">Compare with my list</button>
     </div>
 

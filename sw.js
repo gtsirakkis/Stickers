@@ -12,7 +12,7 @@
  *
  * Bump CACHE_VERSION whenever the app shell changes to force an update.
  */
-const CACHE_VERSION = "wcsm-v5";
+const CACHE_VERSION = "wcsm-v6";
 const SHELL_CACHE = CACHE_VERSION + "-shell";
 const RUNTIME_CACHE = CACHE_VERSION + "-runtime";
 

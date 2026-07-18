@@ -4,7 +4,7 @@
 
   // Bump this on every release so you can confirm which build a phone is
   // running. Keep it in step with CACHE_VERSION in sw.js.
-  const APP_VERSION = "1.3.0";
+  const APP_VERSION = "1.4.0";
 
   const $ = (id) => document.getElementById(id);
 
@@ -80,41 +80,66 @@
       (flagged ? ` · ${flagged} need a check (unknown country or number > ${Store.maxNumber()})` : "");
   }
 
-  // Shared by both the camera and the upload inputs.
-  async function handleImageFile(file, inputEl) {
-    if (!file) return;
-    const preview = $("ocr-preview");
-    preview.src = URL.createObjectURL(file);
-    preview.hidden = false;
+  // Append OCR lines to the review box (accumulates across several images).
+  function appendLines(lines) {
+    const ta = $("detected-text");
+    const existing = ta.value.replace(/\s+$/, "");
+    const add = (lines || []).join("\n");
+    if (!add) return;
+    ta.value = existing ? existing + "\n" + add : add;
+  }
+
+  // Shared by both the camera and the upload inputs. Handles one or many files,
+  // OCRing each in turn and adding its lines to the same review list.
+  async function handleImageFiles(fileList, inputEl) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
 
     const prog = $("ocr-progress");
-    prog.className = "status-line";
-    prog.textContent = "Starting OCR…";
-    $("review-card").hidden = true;
+    const preview = $("ocr-preview");
     $("results-card").hidden = true;
 
     try {
-      const { lines } = await Ocr.recognize(file, (frac, label) => {
-        prog.textContent = `${label}… ${Math.round((frac || 0) * 100)}%`;
-      });
-      $("detected-text").value = lines.join("\n");
-      updateDetectedSummary();
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        preview.src = URL.createObjectURL(file);
+        preview.hidden = false;
+        const tag = files.length > 1 ? `Image ${i + 1}/${files.length}: ` : "";
+        prog.className = "status-line";
+        prog.textContent = tag + "starting…";
+
+        const { lines } = await Ocr.recognize(file, (frac, label) => {
+          prog.textContent = `${tag}${label}… ${Math.round((frac || 0) * 100)}%`;
+        });
+        appendLines(lines);
+        $("review-card").hidden = false;
+        updateDetectedSummary();
+      }
       prog.className = "status-line ok";
-      prog.textContent = "Done. Check the country codes and numbers below, then compare.";
-      $("review-card").hidden = false;
+      prog.textContent =
+        (files.length > 1 ? `Added ${files.length} images. ` : "Done. ") +
+        "Check the list below, add more, then compare.";
     } catch (err) {
       console.error(err);
       prog.className = "status-line error";
       prog.textContent = "OCR failed: " + (err.message || err);
     } finally {
-      if (inputEl) inputEl.value = ""; // allow re-selecting the same file
+      if (inputEl) inputEl.value = ""; // allow re-selecting the same file(s)
     }
   }
 
   function initOcr() {
     ["ocr-camera", "ocr-upload"].forEach((id) => {
       const el = $(id);
-      if (el) el.addEventListener("change", (e) => handleImageFile(e.target.files[0], e.target));
+      if (el) el.addEventListener("change", (e) => handleImageFiles(e.target.files, e.target));
+    });
+
+    $("clear-scan-btn").addEventListener("click", () => {
+      $("detected-text").value = "";
+      updateDetectedSummary();
+      $("results-card").hidden = true;
+      $("ocr-preview").hidden = true;
+      $("ocr-progress").textContent = "";
     });
 
     $("detected-text").addEventListener("input", updateDetectedSummary);
