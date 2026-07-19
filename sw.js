@@ -5,14 +5,15 @@
  *     because the URLs are relative to this script).
  *   - Navigations: network-first, falling back to the cached shell so the app
  *     still opens with no connection (and picks up updates when online).
- *   - Same-origin assets: cache-first.
+ *   - Same-origin assets (our JS/CSS): network-first, cache as offline fallback,
+ *     so a new deploy is picked up on the next online load.
  *   - Cross-origin assets (the CDN libraries + Tesseract OCR model/wasm):
  *     cache-first with runtime caching, so after the first successful use they
  *     are available offline too.
  *
  * Bump CACHE_VERSION whenever the app shell changes to force an update.
  */
-const CACHE_VERSION = "wcsm-v9";
+const CACHE_VERSION = "wcsm-v10";
 const SHELL_CACHE = CACHE_VERSION + "-shell";
 const RUNTIME_CACHE = CACHE_VERSION + "-runtime";
 
@@ -75,21 +76,35 @@ self.addEventListener("fetch", (event) => {
 
   const sameOrigin = new URL(req.url).origin === self.location.origin;
 
-  // Cache-first for everything else (local assets + CDN/OCR runtime assets).
-  event.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req)
+  if (sameOrigin) {
+    // Our own JS/CSS/assets: network-first so a new deploy shows up on the very
+    // next load when online; fall back to cache only when offline.
+    event.respondWith(
+      fetch(req)
         .then((res) => {
-          // Cache successful and opaque (cross-origin CDN) responses for reuse.
-          if (res && (res.ok || res.type === "opaque")) {
+          if (res && res.ok) {
             const copy = res.clone();
-            const cacheName = sameOrigin ? SHELL_CACHE : RUNTIME_CACHE;
-            caches.open(cacheName).then((c) => c.put(req, copy));
+            caches.open(SHELL_CACHE).then((c) => c.put(req, copy));
           }
           return res;
         })
-        .catch(() => cached);
+        .catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  // Cross-origin (CDN libraries + Tesseract OCR model/wasm): cache-first, since
+  // they're large and versioned by URL.
+  event.respondWith(
+    caches.match(req).then((cached) => {
+      if (cached) return cached;
+      return fetch(req).then((res) => {
+        if (res && (res.ok || res.type === "opaque")) {
+          const copy = res.clone();
+          caches.open(RUNTIME_CACHE).then((c) => c.put(req, copy));
+        }
+        return res;
+      });
     })
   );
 });

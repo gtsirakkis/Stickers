@@ -182,10 +182,21 @@
 <script src="js/app.js"></script>
 
 <script>
-  // Register the service worker for offline / installable support.
+  // Register the service worker for offline / installable support, and auto-
+  // reload once when a new version takes control so updates appear without the
+  // user having to reopen the app twice.
   if ("serviceWorker" in navigator) {
+    var hadController = !!navigator.serviceWorker.controller;
+    var refreshing = false;
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (!hadController || refreshing) return; // ignore first install
+      refreshing = true;
+      window.location.reload();
+    });
     window.addEventListener("load", function () {
-      navigator.serviceWorker.register("sw.js").catch(function (err) {
+      navigator.serviceWorker.register("sw.js").then(function (reg) {
+        reg.update(); // check for a new version on every launch
+      }).catch(function (err) {
         console.warn("Service worker registration failed:", err);
       });
     });
