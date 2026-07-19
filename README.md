@@ -17,26 +17,22 @@ Everything runs in your browser and your data is stored locally
    - **Add, edit (change status), and delete** stickers manually.
    - Search, filter, live counts, and **CSV export** (backup).
 
-2. **Scan a photo** (the core feature)
-   - Upload/take a **photo or screenshot** of another collector's list, laid out
-     one country per line (`ECU: 1, 2, 8, 16, 17`).
-   - **OCR** (Tesseract.js, in-browser) reads it into an editable text box, **one
-     country per line**.
+2. **Match & swap** (the core feature)
+   - Two sides, each with its own **camera / upload** buttons and editable review
+     box (you can also just type):
+     - **① They GIVE** — the other collector's spares.
+     - **② They WANT** — the stickers they're missing.
+   - **OCR** (Tesseract.js, in-browser) reads each photo/screenshot into the
+     right box. You can upload **several images at once** and they accumulate.
    - The app reads the **country first, then each number**, so a sticker is
      identified as `ECU 2` — not a bare `2` (which would be ambiguous across
      countries). Country codes are auto-corrected against your own collection,
      and numbers written as `3` or `03` are treated the same.
-   - **Review & fix** the text (correct a wrong country code and all its numbers
-     update at once), then **Compare**. Results are grouped clearly:
-     - 🟢 **They have — you NEED these**
-     - 🔵 **You already have / don't need**
+   - **Compare & propose swap** produces a **balanced two-way exchange**:
+     - 🟢 **You RECEIVE** — they give, you need (their spares ∩ your Missing)
+     - 🤝 **You GIVE** — they want, you have spare (their wants ∩ your Duplicates)
+     - 🔵 **They give, but you already have / don't need**
      - 🟠 **Couldn't read confidently** — fix the text and re-compare
-
-3. **Propose a trade**
-   - Enter (type / paste / import) the other collector's **missing/wanted** list.
-   - The app matches *their wants* against *your duplicates*, and *their
-     duplicates* (from the Scan tab) against *your missing* list, and proposes a
-     **balanced two-way exchange** (you give ⇄ you receive).
 
 ---
 
@@ -147,13 +143,12 @@ the trade proposal.
 2. **Collection tab** → *Choose file* → pick
    `sample-data/sample-master-list.csv`. You should see counts populate
    (Owned / Missing / Duplicate). Try changing a status and deleting a row.
-3. **Scan tab** → *Choose image* → take/upload a photo of a list laid out one
-   country per line (`ECU: 1, 2, 8`). OCR fills the review box; correct any wrong
-   country codes or numbers, then press **Compare with my list** and check the
-   result groups (they'll be `ECU 1`, `ECU 2`, … not bare numbers).
-4. **Trade tab** → enter the other collector's wanted list, one country per line
-   (`MEX: 3, 5, 12`), then **Build proposed exchange**. You'll get a balanced
-   give/receive summary paired against your duplicates.
+3. **Match & swap tab** → in **① They GIVE**, take/upload a photo of the other
+   collector's spares (or type `ECU: 1, 2, 8`). In **② They WANT**, add the
+   stickers they're missing (`MEX: 3, 5, 12`). Correct any wrong country codes
+   or numbers, then press **Compare & propose swap**.
+4. Check the result: **You RECEIVE** (their spares you're missing) and **You
+   GIVE** (their wants you have spare), with a balanced N-for-N summary.
 
 ### OCR tips (for best results)
 - Good lighting, text roughly horizontal, minimal background clutter.
