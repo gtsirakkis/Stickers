@@ -200,6 +200,17 @@ test("matchCode returns exact then fuzzy", () => {
   assertEq(Ocr.matchCode("NAD", KNOWN), { code: "NED", fuzzy: true });
   assertEq(Ocr.matchCode("ZZZ", KNOWN), null);
 });
+test("matchCode strips flag letters via longest-prefix match", () => {
+  // Flag emoji OCR'd as extra trailing letters after the code.
+  assertEq(Ocr.matchCode("JORRE", KNOWN), { code: "JOR", fuzzy: true });
+  assertEq(Ocr.matchCode("COLM", KNOWN), { code: "COL", fuzzy: true });
+  assertEq(Ocr.matchCode("NEDXY", KNOWN), { code: "NED", fuzzy: true });
+});
+test("parseLines matches codes mangled by a 2-letter flag read", () => {
+  const toks = Ocr.parseLines(["JORRE 6, 8, 9", "12"], { knownCodes: KNOWN, maxNumber: 20 });
+  assertEq(toks.map((t) => t.text), ["JOR 6", "JOR 8", "JOR 9", "JOR 12"]);
+  assert(toks.every((t) => !t.low), "mangled-but-resolved codes should be matchable");
+});
 
 // ---- Matcher ------------------------------------------------------------
 console.log("Matcher");

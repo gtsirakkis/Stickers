@@ -32,20 +32,41 @@
     return dp[m][n];
   }
 
-  /** Find a known code equal to (or within 1 edit of) the candidate. */
+  /**
+   * Resolve a leading letter-run to a known country code.
+   * Handles the common OCR artifact where the flag emoji is read as 1-2 extra
+   * letters AFTER the code (TUR -> "TURKS", ALG -> "ALGER", CIV -> "CIVID").
+   */
   function matchCode(candidate, knownCodes) {
     const cand = String(candidate || "").toUpperCase();
     if (!cand) return null;
     if (knownCodes.has(cand)) return { code: cand, fuzzy: false };
-    let best = null;
+
+    // Trailing junk from the flag: a known code is a prefix of the candidate.
+    // Prefer the longest matching code (e.g. so "USA…" beats a 2-letter code).
+    let prefix = null;
     for (const code of knownCodes) {
-      if (editDistance(cand, code) <= 1) {
-        if (!best || Math.abs(code.length - cand.length) < Math.abs(best.length - cand.length)) {
-          best = code;
-        }
+      if (cand.length > code.length && cand.startsWith(code)) {
+        if (!prefix || code.length > prefix.length) prefix = code;
       }
     }
-    return best ? { code: best, fuzzy: true } : null;
+    if (prefix) return { code: prefix, fuzzy: true };
+
+    // A single wrong/missing letter anywhere (on the run or its first 3 chars).
+    const tries = cand.length > 3 ? [cand, cand.slice(0, 3)] : [cand];
+    for (const t of tries) {
+      if (knownCodes.has(t)) return { code: t, fuzzy: true };
+      let best = null;
+      for (const code of knownCodes) {
+        if (editDistance(t, code) <= 1) {
+          if (!best || Math.abs(code.length - t.length) < Math.abs(best.length - t.length)) {
+            best = code;
+          }
+        }
+      }
+      if (best) return { code: best, fuzzy: true };
+    }
+    return null;
   }
 
   /**
@@ -66,8 +87,8 @@
       const line = String(raw == null ? "" : raw).trim();
       if (!line) continue;
 
-      // Leading letters = candidate country code.
-      const lead = line.match(/^([A-Za-z]{2,5})/);
+      // Leading letters = candidate country code (+ any flag letters OCR added).
+      const lead = line.match(/^([A-Za-z]{2,6})/);
       let code = null;
       let unresolved = false; // letters present but not identifiable
       if (lead) {
