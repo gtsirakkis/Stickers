@@ -4,7 +4,7 @@
 
   // Bump this on every release so you can confirm which build a phone is
   // running. Keep it in step with CACHE_VERSION in sw.js.
-  const APP_VERSION = "1.7.0";
+  const APP_VERSION = "1.7.1";
 
   const $ = (id) => document.getElementById(id);
 
