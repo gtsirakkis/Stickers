@@ -4,12 +4,9 @@
 
   // Bump this on every release so you can confirm which build a phone is
   // running. Keep it in step with CACHE_VERSION in sw.js.
-  const APP_VERSION = "1.4.0";
+  const APP_VERSION = "1.5.0";
 
   const $ = (id) => document.getElementById(id);
-
-  // State shared between the Scan and Trade tabs.
-  let detectedTokens = []; // [{text, confidence, low}]
 
   /* ---------------- Tab navigation ---------------- */
   function initTabs() {
@@ -57,46 +54,47 @@
     });
   }
 
-  /* ---------------- OCR review (text) ---------------- */
+  /* ---------------- Match & swap (two-sided scan) ---------------- */
 
-  // Parse the review textarea into country+number tokens, anchored on the
-  // country codes already in the collection.
-  function parseReview() {
-    const lines = String($("detected-text").value || "").split(/\r?\n/);
+  // Widgets for each side: what they GIVE (spares) and what they NEED (wants).
+  const SIDES = {
+    give: { text: "give-text", prog: "give-progress", preview: "give-preview", summary: "give-summary" },
+    need: { text: "need-text", prog: "need-progress", preview: "need-preview", summary: "need-summary" },
+  };
+
+  function parseSide(side) {
+    const lines = String($(SIDES[side].text).value || "").split(/\r?\n/);
     return Ocr.parseLines(lines, {
       knownCodes: Store.countryCodes(),
       maxNumber: Store.maxNumber(),
     });
   }
 
-  function updateDetectedSummary() {
-    const toks = parseReview();
-    detectedTokens = toks;
+  function updateSideSummary(side) {
+    const toks = parseSide(side);
     const flagged = toks.filter((t) => t.low).length;
-    const el = $("detected-summary");
+    const el = $(SIDES[side].summary);
     el.className = "status-line";
-    el.textContent =
-      `${toks.length} sticker(s) recognised` +
-      (flagged ? ` · ${flagged} need a check (unknown country or number > ${Store.maxNumber()})` : "");
+    el.textContent = toks.length
+      ? `${toks.length} sticker(s)` + (flagged ? ` · ${flagged} to check` : "")
+      : "";
   }
 
-  // Append OCR lines to the review box (accumulates across several images).
-  function appendLines(lines) {
-    const ta = $("detected-text");
+  function appendLinesTo(textId, lines) {
+    const ta = $(textId);
     const existing = ta.value.replace(/\s+$/, "");
     const add = (lines || []).join("\n");
     if (!add) return;
     ta.value = existing ? existing + "\n" + add : add;
   }
 
-  // Shared by both the camera and the upload inputs. Handles one or many files,
-  // OCRing each in turn and adding its lines to the same review list.
-  async function handleImageFiles(fileList, inputEl) {
+  // OCR one or many images into the given side's review box (accumulates).
+  async function handleImageFiles(fileList, inputEl, side) {
     const files = Array.from(fileList || []);
     if (!files.length) return;
-
-    const prog = $("ocr-progress");
-    const preview = $("ocr-preview");
+    const cfg = SIDES[side];
+    const prog = $(cfg.prog);
+    const preview = $(cfg.preview);
     $("results-card").hidden = true;
 
     try {
@@ -107,18 +105,16 @@
         const tag = files.length > 1 ? `Image ${i + 1}/${files.length}: ` : "";
         prog.className = "status-line";
         prog.textContent = tag + "starting…";
-
         const { lines } = await Ocr.recognize(file, (frac, label) => {
           prog.textContent = `${tag}${label}… ${Math.round((frac || 0) * 100)}%`;
         });
-        appendLines(lines);
-        $("review-card").hidden = false;
-        updateDetectedSummary();
+        appendLinesTo(cfg.text, lines);
+        updateSideSummary(side);
       }
       prog.className = "status-line ok";
       prog.textContent =
         (files.length > 1 ? `Added ${files.length} images. ` : "Done. ") +
-        "Check the list below, add more, then compare.";
+        "Review the list, then compare.";
     } catch (err) {
       console.error(err);
       prog.className = "status-line error";
@@ -128,26 +124,24 @@
     }
   }
 
-  function initOcr() {
-    ["ocr-camera", "ocr-upload"].forEach((id) => {
-      const el = $(id);
-      if (el) el.addEventListener("change", (e) => handleImageFiles(e.target.files, e.target));
+  function initScan() {
+    ["give", "need"].forEach((side) => {
+      [side + "-camera", side + "-upload"].forEach((id) => {
+        const el = $(id);
+        if (el) el.addEventListener("change", (e) => handleImageFiles(e.target.files, e.target, side));
+      });
+      $(side + "-text").addEventListener("input", () => updateSideSummary(side));
+      $(side + "-clear").addEventListener("click", () => {
+        $(SIDES[side].text).value = "";
+        updateSideSummary(side);
+        $(SIDES[side].preview).hidden = true;
+        $(SIDES[side].prog).textContent = "";
+        $("results-card").hidden = true;
+      });
     });
-
-    $("clear-scan-btn").addEventListener("click", () => {
-      $("detected-text").value = "";
-      updateDetectedSummary();
-      $("results-card").hidden = true;
-      $("ocr-preview").hidden = true;
-      $("ocr-progress").textContent = "";
-    });
-
-    $("detected-text").addEventListener("input", updateDetectedSummary);
 
     $("compare-btn").addEventListener("click", () => {
-      detectedTokens = parseReview();
-      const res = Matcher.match(detectedTokens);
-      renderMatchResults(res);
+      renderSwapResults(parseSide("give"), parseSide("need"));
       $("results-card").hidden = false;
       $("results-card").scrollIntoView({ behavior: "smooth", block: "start" });
     });
@@ -162,106 +156,46 @@
     );
   }
 
-  function renderMatchResults(res) {
-    let html = `
+  function renderSwapResults(give, need) {
+    const giveOk = give.filter((t) => !t.low); // their spares (confident reads)
+    const needOk = need.filter((t) => !t.low); // their wants (confident reads)
+    const low = give.filter((t) => t.low).concat(need.filter((t) => t.low)).map((t) => t.text);
+
+    const swap = Trade.build(giveOk, needOk); // iReceive (I get) / iGive (I give)
+    const giveMatch = Matcher.match(giveOk);  // to surface "you already have"
+
+    const note = swap.pairs
+      ? `A balanced swap of <b>${swap.pairs}</b> for <b>${swap.pairs}</b> is possible` +
+        (swap.balanced ? "." : ", with extras on one side.")
+      : giveOk.length || needOk.length
+      ? "No matching pairs yet — nothing lines up both ways."
+      : "Add their spares (①) and/or their wants (②) above, then compare.";
+
+    let html = `<div class="trade-summary">${note}</div>
       <div class="result-group">
-        <h4><span class="dot want"></span>They have — you NEED these (${res.want.length})</h4>
-        ${numGrid(res.want)}
+        <h4><span class="dot want"></span>You RECEIVE — they give, you need (${swap.iReceive.length})</h4>
+        ${numGrid(swap.iReceive)}
       </div>
       <div class="result-group">
-        <h4><span class="dot have"></span>You already have / don't need (${res.already.length})</h4>
-        ${numGrid(res.already)}
+        <h4><span class="dot give"></span>You GIVE — they want, you have spare (${swap.iGive.length})</h4>
+        ${numGrid(swap.iGive)}
       </div>`;
-    if (res.unknown.length) {
+    if (giveMatch.already.length) {
       html += `
       <div class="result-group">
-        <h4><span class="dot unknown"></span>Not on your list — check manually (${res.unknown.length})</h4>
-        ${numGrid(res.unknown)}
+        <h4><span class="dot have"></span>They give, but you already have / don't need (${giveMatch.already.length})</h4>
+        ${numGrid(giveMatch.already)}
       </div>`;
     }
-    html += `
+    if (low.length) {
+      low.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      html += `
       <div class="result-group">
-        <h4><span class="dot unknown"></span>Couldn't read confidently — fix above &amp; re-compare (${res.lowconf.length})</h4>
-        ${numGrid(res.lowconf)}
+        <h4><span class="dot unknown"></span>Couldn't read confidently — fix above &amp; re-compare (${low.length})</h4>
+        ${numGrid(low)}
       </div>`;
+    }
     $("match-results").innerHTML = html;
-  }
-
-  /* ---------------- Trade tab ---------------- */
-  function getTheirWanted() {
-    const lines = String($("their-missing-text").value || "").split(/\r?\n/);
-    return Ocr.parseLines(lines, {
-      knownCodes: Store.countryCodes(),
-      maxNumber: Store.maxNumber(),
-    });
-  }
-
-  function initTrade() {
-    $("their-missing-file").addEventListener("change", async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const status = $("their-missing-status");
-      status.className = "status-line";
-      status.textContent = "Reading…";
-      try {
-        const name = (file.name || "").toLowerCase();
-        let nums;
-        if (name.endsWith(".csv") || name.endsWith(".xlsx") || name.endsWith(".xls")) {
-          const recs = await Importer.parseFile(file);
-          // Their "wanted" list = the stickers they're missing.
-          const miss = recs.filter((r) => Store.normalizeStatus(r.status) === "Missing");
-          nums = (miss.length ? miss : recs).map((r) => r.number);
-        } else {
-          const text = await file.text();
-          nums = Importer.parseNumberList(text);
-        }
-        const existing = $("their-missing-text").value.trim();
-        $("their-missing-text").value = (existing ? existing + "\n" : "") + nums.join("\n");
-        status.className = "status-line ok";
-        status.textContent = `Loaded ${nums.length} number(s).`;
-      } catch (err) {
-        status.className = "status-line error";
-        status.textContent = "Could not read that file.";
-      } finally {
-        e.target.value = "";
-      }
-    });
-
-    $("use-scan-btn").addEventListener("click", () => {
-      // The scanned list (their duplicates) is used automatically as their
-      // "give" side; this just reports how many were read.
-      const scanned = parseReview();
-      const status = $("their-missing-status");
-      status.className = "status-line";
-      status.textContent = scanned.length
-        ? `Using ${scanned.length} scanned sticker(s) as their "give" list.`
-        : "No scanned list yet — use the Scan tab first.";
-    });
-
-    $("trade-btn").addEventListener("click", () => {
-      const result = Trade.build(parseReview(), getTheirWanted());
-      renderTradeResults(result);
-      $("trade-results-card").hidden = false;
-      $("trade-results-card").scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }
-
-  function renderTradeResults(r) {
-    const note = r.pairs
-      ? `A balanced swap of <b>${r.pairs}</b> for <b>${r.pairs}</b> is possible` +
-        (r.balanced ? "." : `, with extras on one side.`)
-      : "No matching pairs yet — nothing lines up between your duplicates/missing and theirs.";
-    $("trade-results").innerHTML = `
-      <div class="trade-summary">${note}</div>
-      <div class="result-group">
-        <h4><span class="dot want"></span>You receive (their duplicates you're missing) — ${r.iReceive.length}</h4>
-        ${numGrid(r.iReceive)}
-      </div>
-      <div class="result-group">
-        <h4><span class="dot give"></span>You give (your duplicates they want) — ${r.iGive.length}</h4>
-        ${numGrid(r.iGive)}
-      </div>
-    `;
   }
 
   function escapeHtml(s) {
@@ -275,8 +209,7 @@
     initTabs();
     initImport();
     Stickers.init();
-    initOcr();
-    initTrade();
+    initScan();
     const ver = $("app-version");
     if (ver) ver.textContent = "World Cup Sticker Matcher · v" + APP_VERSION;
   }

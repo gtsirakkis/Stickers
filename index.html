@@ -92,91 +92,72 @@
     </div>
   </section>
 
-  <!-- ============================ SCAN TAB ============================= -->
+  <!-- ============================ MATCH TAB ============================ -->
   <section id="tab-scan" class="tab-panel">
-    <h2>Scan a photo</h2>
+    <h2>Match &amp; swap</h2>
+    <p class="hint pad">
+      Upload the other collector's screenshots on the <strong>correct side</strong>:
+      what they <strong>give</strong> (their spares) and what they <strong>want</strong>
+      (their needs). You can also just type into either box.
+    </p>
 
-    <div class="card">
-      <h3>Their duplicates (photo / screenshot)</h3>
-      <p class="hint">
-        Upload a photo of another collector's <strong>duplicate</strong> list.
-        The app reads the numbers with OCR so you can review them.
-      </p>
+    <!-- ① THEY GIVE (their spares) -->
+    <div class="card side-give">
+      <h3>① They GIVE — their spares</h3>
+      <p class="hint">Stickers the other person has spare and can give <em>you</em>.</p>
       <div class="btn-row">
         <label class="file-btn">
-          📷 Take photo
-          <input id="ocr-camera" type="file" accept="image/*" capture="environment" hidden />
+          📷 Photo
+          <input id="give-camera" type="file" accept="image/*" capture="environment" hidden />
         </label>
         <label class="file-btn">
           🖼️ Upload image(s)
-          <input id="ocr-upload" type="file" accept="image/*" multiple hidden />
+          <input id="give-upload" type="file" accept="image/*" multiple hidden />
         </label>
       </div>
-      <p class="hint">
-        Use <strong>Upload</strong> for a screenshot or a picture saved from
-        Facebook, WhatsApp, etc. You can pick <strong>several images at once</strong>,
-        or take/upload more one by one — they all add to the same list below.
-      </p>
-      <div id="ocr-progress" class="status-line"></div>
-      <img id="ocr-preview" class="preview" alt="" hidden />
+      <div id="give-progress" class="status-line"></div>
+      <img id="give-preview" class="preview" alt="" hidden />
+      <textarea id="give-text" rows="7" spellcheck="false"
+        placeholder="One country per line, e.g.&#10;ECU: 1, 2, 8&#10;NED: 4, 5"></textarea>
+      <div class="list-toolbar end">
+        <p id="give-summary" class="status-line"></p>
+        <button id="give-clear" class="btn ghost small">Clear</button>
+      </div>
     </div>
 
-    <div class="card" id="review-card" hidden>
-      <h3>Review detected list</h3>
-      <p class="hint">
-        One country per line, e.g. <code>ECU: 1, 2, 8, 16, 17</code>. Fix any
-        wrong <strong>country code</strong> or number here — the app combines
-        each number with its country (so <code>ECU 2</code>, not just
-        <code>2</code>). Numbers may be written as <code>3</code> or
-        <code>03</code>.
-      </p>
-      <textarea id="detected-text" rows="12" spellcheck="false"
-        placeholder="ECU: 1, 2, 8, 16, 17, 20&#10;NED: 2, 3, 4, 5, 7, 8"></textarea>
-      <div class="list-toolbar end">
-        <p id="detected-summary" class="status-line"></p>
-        <button id="clear-scan-btn" class="btn ghost small">Clear list</button>
+    <!-- ② THEY WANT (their needs) -->
+    <div class="card side-need">
+      <h3>② They WANT — their needs</h3>
+      <p class="hint">Stickers the other person is missing and wants from <em>you</em>.</p>
+      <div class="btn-row">
+        <label class="file-btn">
+          📷 Photo
+          <input id="need-camera" type="file" accept="image/*" capture="environment" hidden />
+        </label>
+        <label class="file-btn">
+          🖼️ Upload image(s)
+          <input id="need-upload" type="file" accept="image/*" multiple hidden />
+        </label>
       </div>
-      <button id="compare-btn" class="btn primary full">Compare with my list</button>
+      <div id="need-progress" class="status-line"></div>
+      <img id="need-preview" class="preview" alt="" hidden />
+      <textarea id="need-text" rows="7" spellcheck="false"
+        placeholder="One country per line, e.g.&#10;MEX: 3, 5, 12&#10;BRA: 2, 8"></textarea>
+      <div class="list-toolbar end">
+        <p id="need-summary" class="status-line"></p>
+        <button id="need-clear" class="btn ghost small">Clear</button>
+      </div>
     </div>
+
+    <p class="hint pad">
+      Country codes are one country per line (e.g. <code>ECU: 1, 2, 8</code>); the
+      app combines each number with its country. Fix any wrong reads before comparing.
+    </p>
+    <button id="compare-btn" class="btn primary full">Compare &amp; propose swap</button>
 
     <div class="card" id="results-card" hidden>
-      <h3>Results</h3>
+      <h3>Proposed swap</h3>
       <div id="match-results"></div>
-    </div>
-  </section>
-
-  <!-- ============================ TRADE TAB ============================ -->
-  <section id="tab-trade" class="tab-panel">
-    <h2>Propose a trade</h2>
-    <p class="hint pad">
-      Enter the other collector's <strong>missing</strong> (wanted) stickers.
-      The app pairs their wants against your <strong>duplicates</strong>, and
-      their duplicates (from the Scan tab) against your <strong>missing</strong>
-      list, to propose a fair two-way swap.
-    </p>
-
-    <div class="card">
-      <h3>Their wanted list</h3>
-      <p class="hint">
-        One country per line, e.g. <code>MEX: 3, 5, 12</code>. Or import their
-        file / reuse the scanned list.
-      </p>
-      <textarea id="their-missing-text" rows="4"
-        placeholder="MEX: 3, 5, 12&#10;BRA: 2, 8"></textarea>
-      <div class="list-toolbar">
-        <label class="file-btn small">
-          Import file…
-          <input id="their-missing-file" type="file" accept=".csv,.xlsx,.xls,.txt" hidden />
-        </label>
-        <button id="use-scan-btn" class="btn ghost small">Use scanned duplicates</button>
-      </div>
-      <p id="their-missing-status" class="status-line"></p>
-    </div>
-
-    <button id="trade-btn" class="btn primary full">Build proposed exchange</button>
-    <div class="card" id="trade-results-card" hidden>
-      <h3>Proposed exchange</h3>
-      <div id="trade-results"></div>
     </div>
   </section>
 
@@ -188,10 +169,7 @@
     <span class="tab-icon">📋</span><span>Collection</span>
   </button>
   <button class="tab-btn" data-tab="scan">
-    <span class="tab-icon">📷</span><span>Scan</span>
-  </button>
-  <button class="tab-btn" data-tab="trade">
-    <span class="tab-icon">🤝</span><span>Trade</span>
+    <span class="tab-icon">🤝</span><span>Match &amp; swap</span>
   </button>
 </nav>
 
