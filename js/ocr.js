@@ -60,6 +60,8 @@
     const tokens = [];
     const seen = new Set();
 
+    let lastCode = null; // for wrapped continuation lines
+
     for (const raw of lines || []) {
       const line = String(raw == null ? "" : raw).trim();
       if (!line) continue;
@@ -67,13 +69,32 @@
       // Leading letters = candidate country code.
       const lead = line.match(/^([A-Za-z]{2,5})/);
       let code = null;
-      let fuzzy = false;
-      if (lead && known.size) {
-        const hit = matchCode(lead[1], known);
-        if (hit) { code = hit.code; fuzzy = hit.fuzzy; }
-      } else if (lead) {
-        code = lead[1].toUpperCase();
+      let unresolved = false; // letters present but not identifiable
+      if (lead) {
+        if (known.size) {
+          const hit = matchCode(lead[1], known);
+          if (hit) {
+            // Exact OR fuzzy: a code that resolves to one already in your
+            // collection is trustworthy (the flag emoji is often mis-read as an
+            // extra letter), so we use it for matching rather than discarding it.
+            code = hit.code;
+          } else {
+            code = lead[1].toUpperCase(); // show it, but flag for review
+            unresolved = true;
+          }
+        } else {
+          code = lead[1].toUpperCase();
+        }
       }
+
+      // A numbers-only line inherits the previous country — this is a row that
+      // wrapped onto a second line (e.g. "ECU 1, 2, 8" then "16, 17, 20").
+      let inherited = false;
+      if (!lead && lastCode) {
+        code = lastCode;
+        inherited = true;
+      }
+      if (code && !inherited && !unresolved) lastCode = code;
 
       // Numbers after the leading letters (ignores flag/colon punctuation).
       const rest = lead ? line.slice(lead[1].length) : line;
@@ -83,10 +104,10 @@
         if (!n) continue;
         const outOfRange = n > maxNumber;
         const text = code ? code + " " + n : String(n);
-        const key = code ? code + " " + n : String(n);
+        const key = text.toUpperCase();
         if (seen.has(key)) continue;
         seen.add(key);
-        const low = !code || fuzzy || outOfRange;
+        const low = !code || outOfRange || unresolved;
         tokens.push({ text, confidence: low ? 40 : 90, low });
       }
     }

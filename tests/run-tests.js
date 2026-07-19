@@ -157,10 +157,26 @@ test("parseLines ignores flag/colon punctuation between code and numbers", () =>
   const toks = Ocr.parseLines(["JPN @: 1, 2, 4"], { knownCodes: KNOWN, maxNumber: 20 });
   assertEq(toks.map((t) => t.text), ["JPN 1", "JPN 2", "JPN 4"]);
 });
-test("parseLines fuzzily corrects a mis-read country code (flagged low)", () => {
+test("parseLines fuzzily corrects a mis-read country code and matches it", () => {
+  // The flag emoji is often OCR'd as an extra letter (COL -> COLM); we correct
+  // it back to a known code and KEEP it usable for matching.
   const toks = Ocr.parseLines(["COLM 3, 4"], { knownCodes: KNOWN, maxNumber: 20 });
   assertEq(toks.map((t) => t.text), ["COL 3", "COL 4"]);
-  assert(toks.every((t) => t.low), "fuzzy-matched code should be low confidence");
+  assert(toks.every((t) => !t.low), "fuzzy-corrected code should be usable, not flagged");
+});
+test("parseLines carries the country down to wrapped lines", () => {
+  // A long row wraps: the second line has only numbers -> inherit ECU.
+  const toks = Ocr.parseLines(["ECU 1, 2, 8", "16, 17, 20", "NED 4"], {
+    knownCodes: KNOWN,
+    maxNumber: 20,
+  });
+  assertEq(toks.map((t) => t.text), ["ECU 1", "ECU 2", "ECU 8", "ECU 16", "ECU 17", "ECU 20", "NED 4"]);
+  assert(toks.every((t) => !t.low), "inherited numbers should be matchable");
+});
+test("parseLines flags unidentifiable leading letters for review", () => {
+  const toks = Ocr.parseLines(["ZZZ 5"], { knownCodes: KNOWN, maxNumber: 20 });
+  assertEq(toks.map((t) => t.text), ["ZZZ 5"]);
+  assert(toks[0].low, "an unknown country should be flagged");
 });
 test("parseLines flags out-of-range junk numbers", () => {
   const toks = Ocr.parseLines(["ECU 171, 616"], { knownCodes: KNOWN, maxNumber: 20 });
